@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audit Dashboard — RAW Final Summary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0d1117;
+    --panel:#141b26;
+    --panel-2:#182031;
+    --border:#232d3f;
+    --text:#e7ecf5;
+    --muted:#8996ab;
+    --accent:#3fc8ff;
+    --accent-dim:#1c3c4d;
+    --match:#2ecc8f;
+    --short:#ff5c7a;
+    --excess:#ffb648;
+    --stamp-rot:-4deg;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 500px at 90% -10%, #12233066 0%, transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    padding:28px 20px 60px;
+  }
+  .wrap{max-width:1280px;margin:0 auto;}
+
+  /* header */
+  header{
+    display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;
+    padding-bottom:20px;margin-bottom:26px;border-bottom:1px solid var(--border);
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;
+    color:var(--accent);text-transform:uppercase;margin:0 0 8px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .eyebrow .bars{display:inline-flex;gap:2px;}
+  .eyebrow .bars span{width:2px;background:var(--accent);opacity:.7;}
+  h1{
+    font-family:'Archivo',sans-serif;font-weight:800;font-size:32px;margin:0;
+    letter-spacing:-0.01em;
+  }
+  .sub{color:var(--muted);font-size:13px;margin-top:6px;font-family:'IBM Plex Mono',monospace;}
+  .refresh-box{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);}
+  .refresh-box button{
+    background:var(--accent);color:#04141c;border:none;border-radius:6px;
+    padding:9px 16px;font-family:'Inter',sans-serif;font-weight:600;font-size:13px;
+    cursor:pointer;margin-bottom:8px;transition:opacity .15s;
+  }
+  .refresh-box button:hover{opacity:.85;}
+  .refresh-box button:disabled{opacity:.5;cursor:wait;}
+  .scan-row{display:flex;gap:6px;justify-content:flex-end;margin-bottom:8px;}
+  .scan-row a,.scan-row button{margin:0;text-decoration:none;}
+  .scan-row a{background:#2ecc8f;color:#04141c;border-radius:6px;padding:9px 16px;font-family:'Inter',sans-serif;font-weight:600;font-size:13px;}
+  .scan-row a:hover{opacity:.85;}
+  .scan-row button.copy{background:transparent;color:var(--accent);border:1px solid var(--accent);padding:9px 12px;}
+
+  #status{
+    font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--muted);
+    padding:14px 16px;border:1px dashed var(--border);border-radius:8px;margin-bottom:20px;
+  }
+  #status.err{color:var(--short);border-color:var(--short);}
+
+  .panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+  .dl-btn{
+    background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:6px;
+    padding:5px 10px;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;
+    cursor:pointer;transition:background .15s,color .15s;white-space:nowrap;flex-shrink:0;
+  }
+  .dl-btn:hover{background:var(--accent);color:#04141c;}
+
+  /* KPI row */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:12px;margin-bottom:28px;}
+  .kpi{
+    background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:16px 16px 14px;position:relative;overflow:hidden;
+  }
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent-line,var(--accent));}
+  .kpi .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;}
+  .kpi .val{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;}
+  .kpi.match{--accent-line:var(--match);} .kpi.match .val{color:var(--match);}
+  .kpi.short{--accent-line:var(--short);} .kpi.short .val{color:var(--short);}
+  .kpi.excess{--accent-line:var(--excess);} .kpi.excess .val{color:var(--excess);}
+
+  /* panels */
+  .grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:16px;}
+  .grid3{display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:16px;}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr;}}
+
+  .panel{
+    background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;
+  }
+  .panel h2{
+    font-family:'Archivo',sans-serif;font-size:15px;margin:0 0 4px;font-weight:700;
+  }
+  .panel .desc{color:var(--muted);font-size:12px;margin-bottom:16px;font-family:'IBM Plex Mono',monospace;}
+  .chart-holder{position:relative;height:280px;}
+  .chart-holder.tall{height:340px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{
+    text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    padding:8px 10px;border-bottom:1px solid var(--border);font-weight:600;position:sticky;top:0;background:var(--panel);
+  }
+  tbody td{padding:8px 10px;border-bottom:1px solid #1c2536;font-family:'IBM Plex Mono',monospace;}
+  tbody tr:hover{background:var(--panel-2);}
+  .num{text-align:right;}
+  .stamp{
+    display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;
+    padding:2px 8px;border-radius:4px;letter-spacing:.05em;text-transform:uppercase;
+    transform:rotate(var(--stamp-rot));border:1px solid;
+  }
+  .stamp.Match{color:var(--match);border-color:var(--match);background:#2ecc8f18;}
+  .stamp.Short{color:var(--short);border-color:var(--short);background:#ff5c7a18;}
+  .stamp.Excess{color:var(--excess);border-color:var(--excess);background:#ffb64818;}
+
+  .simple-grid-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:8px;}
+  table.simple-grid{border-collapse:collapse;width:100%;}
+  table.simple-grid td{
+    font-family:'IBM Plex Mono',monospace;font-size:13px;text-align:right;
+    padding:10px 14px;border:1px solid var(--border);white-space:nowrap;min-width:70px;
+  }
+  table.simple-grid tr.grid-vals td{color:var(--text);font-weight:600;}
+  table.simple-grid tr.grid-vals td.lowest{color:var(--short);}
+  table.simple-grid tr.grid-labels td{
+    font-family:'Inter',sans-serif;font-weight:700;font-size:12px;
+    color:var(--muted);text-align:left;background:var(--panel-2);
+  }
+  table.simple-grid tr.grid-labels td.lowest{color:var(--short);}
+
+  th.sortable{cursor:pointer;user-select:none;}
+  th.sortable:hover{color:var(--accent);}
+  th .arrow{opacity:.5;margin-left:3px;}
+
+  .table-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+  .table-controls input, .table-controls select{
+    background:#0d1420;border:1px solid var(--border);color:var(--text);
+    padding:8px 10px;border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;
+  }
+  .table-controls input{flex:1;min-width:180px;}
+  .table-scroll{max-height:480px;overflow:auto;border:1px solid var(--border);border-radius:8px;}
+  .pager{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:12px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+  .pager button{
+    background:var(--panel-2);border:1px solid var(--border);color:var(--text);
+    padding:6px 12px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;
+  }
+  .pager button:disabled{opacity:.4;cursor:not-allowed;}
+
+  /* ===== Remaining Shelf Life section ===== */
+  #shelfLife{margin-top:16px;}
+  .sl-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px;}
+  .sl-card{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:14px 14px 12px;position:relative;overflow:hidden;cursor:pointer;text-align:left;color:var(--text);font-family:'Inter',sans-serif;}
+  .sl-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--k);}
+  .sl-card.on{border-color:var(--k);box-shadow:0 0 0 1px var(--k) inset;}
+  .sl-card .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;}
+  .sl-card .val{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:var(--k);}
+  .sl-card .u{font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-top:4px;}
+  .sl-card .r{font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+  .sl-bar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:#0d1420;margin-bottom:16px;}
+  .sl-bar div{height:100%;}
+  .sl-tag{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--k);color:var(--k);background:#ffffff08;}
+  #slErr{color:var(--short);font-family:'IBM Plex Mono',monospace;font-size:12px;margin-bottom:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <p class="eyebrow"><span class="bars"><span style="height:8px"></span><span style="height:13px"></span><span style="height:6px"></span><span style="height:15px"></span><span style="height:9px"></span></span> Warehouse Audit · RAW Final Summary</p>
+      <h1>Audit Dashboard</h1>
+      <div class="sub" id="sheetTitle">Honasa Audit — Nov-FRK</div>
+    </div>
+    <div class="refresh-box">
+      <div class="scan-row">
+        <a id="scanLink" href="Form.html" target="_blank" rel="noopener">📷 Open Scanner</a>
+        <a href="#shelfLife" style="background:#ffb648;">⏳ Shelf Life</a>
+        <button class="copy" onclick="copyScanLink(this)">Copy link</button>
+      </div>
+      <button id="refreshBtn" onclick="loadData()">↻ Refresh now</button>
+      <div>Last updated: <span id="lastUpdated">—</span></div>
+      <div>Auto-refresh in <span id="countdown">300</span>s</div>
+    </div>
+  </header>
+
+  <div id="status">Loading data from Google Sheet…</div>
+
+  <div class="kpis" id="kpiRow"></div>
+
+  <div class="panel">
+    <h2>EAN Status Split</h2>
+    <div class="desc">Short vs Excess vs Match, by EAN count</div>
+    <div class="chart-holder"><canvas id="statusChart"></canvas></div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-head"><h2>Team-wise Summary Table</h2><button class="dl-btn" onclick="downloadTeamSummary()">⬇ CSV</button></div>
+      <div class="desc">Physical count qty + EANs touched per team</div>
+      <div class="table-scroll" style="max-height:320px;">
+        <table id="teamTable">
+          <thead><tr><th>Team</th><th class="num">Qty Counted</th><th class="num">EANs Touched</th><th class="num">Share %</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Top Variance EANs</h2>
+      <div class="desc">Largest Phy Count − SYS gaps (top 10 by magnitude)</div>
+      <div class="chart-holder tall"><canvas id="topVarianceChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Not Match EAN Summary</h2><button class="dl-btn" onclick="downloadNotMatchSummary()">⬇ CSV</button></div>
+    <div class="desc">Sum taken directly from cell Q1 of the "Not match EAN" column</div>
+    <div class="kpis" style="margin-bottom:0;">
+      <div class="kpi short"><div class="lbl">Not Match EAN — Total Sum</div><div class="val" id="notMatchSum">0</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Combined Team Scan Log</h2><button class="dl-btn" onclick="downloadCombinedLog()">⬇ CSV</button></div>
+    <div class="desc">All scans from the "Audit Entries" tab (auditor-wise raw scan log)</div>
+    <div class="table-controls">
+      <input type="text" id="combinedSearchBox" placeholder="Search EAN / Shelf / Auditor…" oninput="applyCombinedFilters()">
+      <select id="combinedTeamFilter" onchange="applyCombinedFilters()">
+        <option value="All">All teams</option>
+      </select>
+      <span id="combinedRowCount" style="color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:12px;"></span>
+    </div>
+    <div class="table-scroll">
+      <table id="combinedTable">
+        <thead>
+          <tr>
+            <th class="sortable" onclick="sortCombinedBy('team')">Auditor <span class="arrow">↕</span></th>
+            <th class="sortable" onclick="sortCombinedBy('date')">Date <span class="arrow">↕</span></th>
+            <th class="sortable" onclick="sortCombinedBy('shelf')">Shelf <span class="arrow">↕</span></th>
+            <th class="sortable" onclick="sortCombinedBy('ean')">EAN <span class="arrow">↕</span></th>
+            <th class="sortable num" onclick="sortCombinedBy('mrp')">MRP <span class="arrow">↕</span></th>
+            <th class="sortable num" onclick="sortCombinedBy('caseSize')">Case Size <span class="arrow">↕</span></th>
+            <th class="sortable num" onclick="sortCombinedBy('boxCount')">Box Count <span class="arrow">↕</span></th>
+            <th class="sortable num" onclick="sortCombinedBy('looseQty')">Loose QTY <span class="arrow">↕</span></th>
+            <th class="sortable num" onclick="sortCombinedBy('boxQty')">Box QTY <span class="arrow">↕</span></th>
+            <th class="sortable num" onclick="sortCombinedBy('totalQty')">Total QTY <span class="arrow">↕</span></th>
+            <th class="sortable" onclick="sortCombinedBy('binId')">Bin ID <span class="arrow">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="combinedTableBody"></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span id="combinedPageInfo"></span>
+      <div>
+        <button onclick="changeCombinedPage(-1)" id="combinedPrevBtn">‹ Prev</button>
+        <button onclick="changeCombinedPage(1)" id="combinedNextBtn">Next ›</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>BIN-wise Summary</h2><button class="dl-btn" onclick="downloadBinSummary()">⬇ CSV</button></div>
+    <div class="desc">SYS vs Physical vs Diff, by bin/location</div>
+    <div class="table-wrap">
+      <table id="binSummaryTable">
+        <thead>
+          <tr>
+            <th>Location</th>
+            <th class="num">SYS</th>
+            <th class="num">Physical</th>
+            <th class="num">Diff</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>EAN-wise Detail — Short / Excess / Match / Pending</h2><button class="dl-btn" onclick="downloadEanDetail()">⬇ CSV</button></div>
+    <div class="desc">Phy Count − SYS per EAN, with pending scan qty (SYS not yet matched by physical count)</div>
+    <div class="table-controls">
+      <input type="text" id="searchBox" placeholder="Search EAN…" oninput="applyFilters()">
+      <select id="typeFilter" onchange="applyFilters()">
+        <option value="All">All statuses</option>
+        <option value="Short">Short</option>
+        <option value="Excess">Excess</option>
+        <option value="Match">Match</option>
+      </select>
+      <span id="rowCount" style="color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:12px;"></span>
+    </div>
+    <div class="table-scroll">
+      <table id="eanTable">
+        <thead>
+          <tr>
+            <th class="sortable" onclick="sortBy('ean')">EAN <span class="arrow">↕</span></th>
+            <th class="sortable num" onclick="sortBy('sys')">SYS <span class="arrow">↕</span></th>
+            <th class="sortable num" onclick="sortBy('phy')">Phy Count <span class="arrow">↕</span></th>
+            <th class="sortable num" onclick="sortBy('variance')">Variance <span class="arrow">↕</span></th>
+            <th class="sortable" onclick="sortBy('type')">Status <span class="arrow">↕</span></th>
+            <th class="sortable num" onclick="sortBy('pending')">Pending Scan Qty <span class="arrow">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="eanTableBody"></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span id="pageInfo"></span>
+      <div>
+        <button onclick="changePage(-1)" id="prevBtn">‹ Prev</button>
+        <button onclick="changePage(1)" id="nextBtn">Next ›</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="panel" id="shelfLife">
+    <div class="panel-head">
+      <div>
+        <h2>Remaining Shelf Life</h2>
+        <div class="desc">Expiry − today (MM/YYYY expiry = us mahine ke last din tak) · Audit Entries · <span id="slUpd">—</span></div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="dl-btn" onclick="slDownload('csv')">⬇ CSV</button>
+        <button class="dl-btn" onclick="slDownload('xlsx')">⬇ Excel</button>
+      </div>
+    </div>
+    <div id="slErr"></div>
+    <div class="sl-cards" id="slCards"></div>
+    <div class="sl-bar" id="slBar"></div>
+    <div class="table-controls">
+      <input type="text" id="slQ" placeholder="Search EAN / Shelf / Auditor / Bin ID…" oninput="slReset(false)">
+      <select id="slAud" onchange="slReset(false)"><option value="">All auditors</option></select>
+      <button class="dl-btn" onclick="slReset(true)">Clear filters</button>
+      <span id="slCnt" style="color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:12px;"></span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead id="slTh"></thead>
+        <tbody id="slTb"></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span id="slInfo"></span>
+      <button id="slMoreBtn" style="display:none" onclick="slShowMore()">Show more</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SHEET_ID = "1K-CIvdjWCDd-0N5cQXR2q9raKstQEOd3ec-hkkneD3o";
+const SHEET_NAME = "EAN RAW Final Summary";
+const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}`;
+const BIN_SHEET_NAME = "BIN RAW Final Summary";
+const BIN_GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(BIN_SHEET_NAME)}`;
+// Scanner (Form.html) saves every bin here. Cols: A=Timestamp, B=Auditor, C=Shelf, D=EAN,
+// E=MRP, F=Case Size, G=Box Count, H=Loose QTY, I=Total QTY, J=Bin ID
+const ENTRIES_SHEET_NAME = "Audit Entries";
+const ENTRIES_GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&headers=1&sheet=${encodeURIComponent(ENTRIES_SHEET_NAME)}`;
+
+function colLetter(i){ let s=''; i++; while(i>0){ s=String.fromCharCode(65+((i-1)%26))+s; i=Math.floor((i-1)/26);} return s; }
+
+// Fetches a single-row range (e.g. "D2:O2") on its own. Scoping the query to
+// just that row means every cell is text, so gviz infers a "string" column
+// type and returns the real header text — unlike the full-sheet query, where
+// these same columns are dominated by 0/1 counts and gviz nulls the header
+// cell's text because it infers a "number" column instead.
+async function fetchHeaderRange(sheetName, range){
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&range=${range}`;
+  const res = await fetch(url);
+  if(!res.ok) return null;
+  const text = await res.text();
+  const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+  const data = JSON.parse(jsonStr);
+  const row = data.table.rows && data.table.rows[0];
+  if(!row) return null;
+  return row.c.map(c => (c && (c.v ?? c.f)) ? String(c.v ?? c.f) : '');
+}
+
+let rawRows = [];
+let teamNames = [];
+let teamTotals = [];
+let teamEanCounts = [];
+let notMatchTotal = 0;
+let binSummary = [];
+let filteredRows = [];
+let sortState = {col:'variance', dir:'asc'};
+let currentPage = 1;
+const PAGE_SIZE = 50;
+
+let combinedRows = [];
+let filteredCombinedRows = [];
+let combinedSortState = {col:'date', dir:'desc'};
+let combinedPage = 1;
+
+let statusChart, topVarianceChart;
+let countdownTimer, countdownVal = 300;
+
+function fmt(n){ return Number(n).toLocaleString('en-IN'); }
+
+// Generic CSV download: headers = array of column names, rowsData = array of arrays.
+function downloadCsv(filename, headers, rowsData){
+  const esc = (v) => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const lines = [headers.map(esc).join(',')].concat(rowsData.map(r => r.map(esc).join(',')));
+  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function loadData(){
+  const btn = document.getElementById('refreshBtn');
+  const statusEl = document.getElementById('status');
+  btn.disabled = true;
+  statusEl.className = '';
+  statusEl.textContent = 'Fetching latest data from Google Sheet…';
+
+  try{
+    const combinedPromise = loadCombinedTeamTabs().catch(e => console.warn('[audit-dashboard] combined team tabs failed:', e));
+    const [res, binRes] = await Promise.all([fetch(GVIZ_URL), fetch(BIN_GVIZ_URL)]);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+    const data = JSON.parse(jsonStr);
+    const rows = data.table.rows;
+
+    let binRows = [];
+    if(binRes.ok){
+      const binText = await binRes.text();
+      const binJsonStr = binText.substring(binText.indexOf('{'), binText.lastIndexOf('}') + 1);
+      const binData = JSON.parse(binJsonStr);
+      binRows = binData.table.rows || [];
+    } else {
+      console.warn('[audit-dashboard] BIN tab fetch failed:', binRes.status);
+    }
+
+    if(!rows || rows.length < 3){
+      throw new Error('Sheet returned no data rows — check that the tab is not filtered (use Filter Views, not standard filters) and is shared as "Anyone with the link can view".');
+    }
+
+    // rows[0] = sheet's own totals row, rows[1] = header labels, rows[2..] = data
+    // NOTE: gviz infers each column's data TYPE from its dominant content. Since
+    // columns D..O are almost entirely 0/1 counts, gviz treats them as "number"
+    // columns — so the text header in row 2 ("Team-A" etc.) comes back with
+    // v:null and f:null too. We recover the real names separately below via a
+    // range-scoped query. Always fall back to `.f` when `.v` is null/empty.
+    const cellText = (cell) => {
+      if(!cell) return '';
+      if(cell.v !== null && cell.v !== undefined && cell.v !== '') return String(cell.v);
+      if(cell.f !== null && cell.f !== undefined && cell.f !== '') return String(cell.f);
+      return '';
+    };
+
+    const headerRow = rows[1].c;
+
+    const findColByName = (names) => {
+      for(let i = 0; i < headerRow.length; i++){
+        const label = cellText(headerRow[i]).trim().toLowerCase();
+        if(names.includes(label)) return i;
+      }
+      return -1;
+    };
+
+    let typeColIdx = findColByName(['type']);
+    let valueColIdx = findColByName(['value']);
+    let notMatchColIdx = findColByName(['not match ean']);
+
+    // Fallback: original position-based detection (walk team columns until
+    // a blank header or literal "type" match is hit). Used whenever the
+    // name-lookup above can't find a column, e.g. because gviz nulled out
+    // that header cell's text (happens when it infers the column as numeric).
+    if(typeColIdx === -1){
+      let idx = 3; // column D
+      while(idx < headerRow.length){
+        const label = cellText(headerRow[idx]);
+        if(!label || /^type$/i.test(label)) break;
+        idx++;
+      }
+      typeColIdx = idx;
+    }
+    if(valueColIdx === -1) valueColIdx = typeColIdx + 1;
+    if(notMatchColIdx === -1) notMatchColIdx = typeColIdx + 2;
+
+    let teamStartIdx = 3; // column D
+
+    // Real team names (e.g. "Harsh & Deepak_11174") live in row 2 of columns
+    // teamStartIdx..typeColIdx-1 (currently D2:O2). Fetch that exact range on
+    // its own so gviz sees only text and doesn't null it out.
+    let teamHeaderRange = null;
+    if(typeColIdx > teamStartIdx){
+      const rangeStr = `${colLetter(teamStartIdx)}2:${colLetter(typeColIdx-1)}2`;
+      try{
+        teamHeaderRange = await fetchHeaderRange(SHEET_NAME, rangeStr);
+      }catch(e){
+        console.warn('[audit-dashboard] team header range fetch failed:', e);
+      }
+    }
+
+    teamNames = [];
+    for(let idx = teamStartIdx; idx < typeColIdx; idx++){
+      const rangeIdx = idx - teamStartIdx;
+      let label = (teamHeaderRange && teamHeaderRange[rangeIdx] && teamHeaderRange[rangeIdx].trim()) ? teamHeaderRange[rangeIdx].trim() : '';
+      if(!label) label = cellText(headerRow[idx]);
+      if(!label) label = 'Team-' + String.fromCharCode(65 + rangeIdx); // last-resort fallback only if the range fetch also came back empty
+      teamNames.push(label);
+    }
+
+    // Diagnostic: dump every header-row cell (raw v/f) so any misalignment
+    // is visible at a glance in the browser console.
+    console.log('[audit-dashboard] full header row (row 2):', headerRow.map((c,i)=>`${colLetter(i)}: v=${JSON.stringify(c?.v)} f=${JSON.stringify(c?.f)}`));
+    console.log('[audit-dashboard] team header range fetch ->', teamHeaderRange);
+    console.log('[audit-dashboard] detected columns ->', {
+      typeCol: colLetter(typeColIdx), valueCol: colLetter(valueColIdx), notMatchCol: colLetter(notMatchColIdx),
+      teamCount: teamNames.length, teamNames
+    });
+
+    const cellNum = (cell) => {
+      if(!cell) return 0;
+      if(cell.v !== null && cell.v !== undefined && cell.v !== '') return Number(cell.v) || 0;
+      if(cell.f !== null && cell.f !== undefined && cell.f !== '') return Number(cell.f) || 0;
+      return 0;
+    };
+
+    // Row 1 (rows[0]) already holds the sheet's own totals — pull team sums and
+    // the Not Match EAN sum straight from there instead of recomputing.
+    const totalsRow = rows[0].c;
+    teamTotals = teamNames.map((_, i) => cellNum(totalsRow[teamStartIdx + i]));
+    notMatchTotal = cellNum(totalsRow[notMatchColIdx]);
+
+    // --- BIN RAW Final Summary (separate "BIN RAW Final Summary" tab) ---
+    // Located by scanning for a cell whose text is exactly "Location" rather
+    // than assuming a fixed row/column, since the block's exact position can shift.
+    binSummary = [];
+    let binHeaderRow = -1, binHeaderCol = -1;
+    for(let r = 0; r < binRows.length && binHeaderRow === -1; r++){
+      const c = binRows[r].c;
+      if(!c) continue;
+      for(let ci = 0; ci < c.length; ci++){
+        if(cellText(c[ci]).trim().toLowerCase() === 'location'){
+          binHeaderRow = r; binHeaderCol = ci; break;
+        }
+      }
+    }
+    if(binHeaderRow !== -1){
+      const locCol = binHeaderCol, sysCol = binHeaderCol + 1, phyCol = binHeaderCol + 2, diffCol = binHeaderCol + 3;
+      for(let r = binHeaderRow + 1; r < binRows.length; r++){
+        const c = binRows[r].c;
+        const loc = (c && c[locCol]) ? cellText(c[locCol]) : '';
+        if(!loc) break;
+        binSummary.push({ location: loc, sys: cellNum(c[sysCol]), phy: cellNum(c[phyCol]), diff: cellNum(c[diffCol]) });
+      }
+    }
+    console.log('[audit-dashboard] BIN summary ->', { binHeaderRow, binHeaderCol, count: binSummary.length, binSummary });
+
+    rawRows = [];
+    for(let r = 2; r < rows.length; r++){
+      const c = rows[r].c;
+      if(!c || !c[0] || c[0].v === null || c[0].v === '') continue;
+      const ean = String(c[0] && (c[0].v ?? c[0].f) || '');
+      const sys = cellNum(c[1]);
+      const phy = cellNum(c[2]);
+      const teamVals = [];
+      for(let t = teamStartIdx; t < typeColIdx; t++){
+        teamVals.push(cellNum(c[t]));
+      }
+      const variance = phy - sys;
+      const type = variance < 0 ? 'Short' : (variance > 0 ? 'Excess' : 'Match');
+      const pending = variance < 0 ? -variance : 0;
+      rawRows.push({ean, sys, phy, teamVals, variance, type, pending});
+    }
+
+    if(rawRows.length === 0){
+      throw new Error('No EAN rows parsed — sheet layout may have changed.');
+    }
+
+    computeAggregates();
+    renderKPIs();
+    renderTeamTable();
+    renderStatusChart();
+    renderTopVarianceChart();
+    renderNotMatchPanel();
+    renderBinSummary();
+    applyFilters();
+    await combinedPromise;
+
+    statusEl.textContent = `Loaded ${rawRows.length} EAN rows across ${teamNames.length} teams.`;
+    document.getElementById('lastUpdated').textContent = new Date().toLocaleString('en-IN');
+    resetCountdown();
+  }catch(err){
+    statusEl.className = 'err';
+    statusEl.textContent = 'Error loading sheet: ' + err.message;
+    console.error(err);
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+// Reads the "Audit Entries" tab (written by the scanner Form.html via Apps Script)
+// and parses every row that has an EAN into a scan-log row. "Team" = Auditor name.
+async function fetchAuditEntries(){
+  const res = await fetch(ENTRIES_GVIZ_URL);
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const text = await res.text();
+  const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+  const data = JSON.parse(jsonStr);
+  const tabRows = data.table.rows || [];
+
+  const cellText = (cell) => {
+    if(!cell) return '';
+    if(cell.v !== null && cell.v !== undefined && cell.v !== '') return String(cell.f ?? cell.v);
+    if(cell.f !== null && cell.f !== undefined && cell.f !== '') return String(cell.f);
+    return '';
+  };
+  const cellNum = (cell) => {
+    if(!cell) return 0;
+    if(cell.v !== null && cell.v !== undefined && cell.v !== '') return Number(cell.v) || 0;
+    if(cell.f !== null && cell.f !== undefined && cell.f !== '') return Number(cell.f) || 0;
+    return 0;
+  };
+  // gviz returns date-time cells as "Date(y,m,d,h,mi,s)" in .v — turn into a sortable timestamp
+  const cellTs = (cell) => {
+    if(!cell || typeof cell.v !== 'string') return 0;
+    const m = /^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?/.exec(cell.v);
+    return m ? new Date(+m[1], +m[2], +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0)).getTime() : 0;
+  };
+
+  const out = [];
+  for(let r = 0; r < tabRows.length; r++){
+    const c = tabRows[r].c;
+    if(!c) continue;
+    const ean = cellText(c[3]);
+    if(!ean || ean.trim().toLowerCase() === 'ean') continue; // skip blanks / stray header row
+    const caseSize = cellNum(c[5]), boxCount = cellNum(c[6]), looseQty = cellNum(c[7]);
+    const boxQty = caseSize * boxCount;
+    out.push({
+      team: cellText(c[1]) || '—',
+      date: cellText(c[0]),
+      ts: cellTs(c[0]),
+      shelf: cellText(c[2]),
+      ean: ean,
+      mrp: cellNum(c[4]),
+      caseSize: caseSize,
+      boxCount: boxCount,
+      looseQty: looseQty,
+      boxQty: boxQty,
+      totalQty: cellNum(c[8]) || (boxQty + looseQty),
+      binId: cellText(c[9])
+    });
+  }
+  return out;
+}
+
+async function loadCombinedTeamTabs(){
+  combinedRows = await fetchAuditEntries();
+
+  const teamNamesInLog = [...new Set(combinedRows.map(r => r.team))].sort((a,b)=>a.localeCompare(b));
+  const teamFilterEl = document.getElementById('combinedTeamFilter');
+  const prevVal = teamFilterEl.value;
+  teamFilterEl.innerHTML = '<option value="All">All teams</option>' +
+    teamNamesInLog.map(t => `<option value="${t}">${t}</option>`).join('');
+  teamFilterEl.value = [...teamFilterEl.options].some(o => o.value === prevVal) ? prevVal : 'All';
+
+  applyCombinedFilters();
+}
+
+function downloadCombinedLog(){
+  const rows = filteredCombinedRows.map(r => [
+    r.team, r.date, r.shelf, r.ean, r.mrp, r.caseSize, r.boxCount,
+    r.looseQty, r.boxQty, r.totalQty, r.binId
+  ]);
+  downloadCsv('combined-team-scan-log.csv',
+    ['Auditor','Date','Shelf','EAN','MRP','Case Size','Box Count','Loose QTY','Box QTY','Total QTY','Bin ID'],
+    rows);
+}
+
+function downloadNotMatchSummary(){
+  downloadCsv('not-match-ean-summary.csv', ['Metric','Value'], [['Not Match EAN — Total Sum', notMatchTotal]]);
+}
+
+function applyCombinedFilters(){
+  const q = document.getElementById('combinedSearchBox').value.trim().toLowerCase();
+  const team = document.getElementById('combinedTeamFilter').value;
+  filteredCombinedRows = combinedRows.filter(r =>
+    (team === 'All' || r.team === team) &&
+    (!q || r.ean.toLowerCase().includes(q) || r.shelf.toLowerCase().includes(q) || r.team.toLowerCase().includes(q))
+  );
+  sortCombinedRows();
+  combinedPage = 1;
+  renderCombinedTable();
+}
+
+function sortCombinedBy(col){
+  if(combinedSortState.col === col){ combinedSortState.dir = combinedSortState.dir==='asc' ? 'desc' : 'asc'; }
+  else{ combinedSortState.col = col; combinedSortState.dir = 'asc'; }
+  sortCombinedRows();
+  renderCombinedTable();
+}
+
+function sortCombinedRows(){
+  const {col, dir} = combinedSortState;
+  const mul = dir==='asc' ? 1 : -1;
+  filteredCombinedRows.sort((a,b) => {
+    if(col === 'date') return (a.ts - b.ts) * mul;
+    let va = a[col], vb = b[col];
+    if(typeof va === 'string') return va.localeCompare(vb) * mul;
+    return (va - vb) * mul;
+  });
+}
+
+function renderCombinedTable(){
+  const start = (combinedPage-1) * PAGE_SIZE;
+  const pageRows = filteredCombinedRows.slice(start, start + PAGE_SIZE);
+  document.getElementById('combinedTableBody').innerHTML = pageRows.map(r => `
+    <tr>
+      <td>${r.team}</td>
+      <td>${r.date}</td>
+      <td>${r.shelf}</td>
+      <td>${r.ean}</td>
+      <td class="num">${fmt(r.mrp)}</td>
+      <td class="num">${fmt(r.caseSize)}</td>
+      <td class="num">${fmt(r.boxCount)}</td>
+      <td class="num">${fmt(r.looseQty)}</td>
+      <td class="num">${fmt(r.boxQty)}</td>
+      <td class="num">${fmt(r.totalQty)}</td>
+      <td>${r.binId}</td>
+    </tr>`).join('');
+
+  document.getElementById('combinedRowCount').textContent = `${filteredCombinedRows.length} of ${combinedRows.length} rows`;
+  const totalPages = Math.max(1, Math.ceil(filteredCombinedRows.length / PAGE_SIZE));
+  document.getElementById('combinedPageInfo').textContent = `Page ${combinedPage} of ${totalPages}`;
+  document.getElementById('combinedPrevBtn').disabled = combinedPage <= 1;
+  document.getElementById('combinedNextBtn').disabled = combinedPage >= totalPages;
+}
+
+function changeCombinedPage(delta){
+  const totalPages = Math.max(1, Math.ceil(filteredCombinedRows.length / PAGE_SIZE));
+  combinedPage = Math.min(totalPages, Math.max(1, combinedPage + delta));
+  renderCombinedTable();
+}
+
+function computeAggregates(){
+  teamEanCounts = teamNames.map((_, i) => rawRows.reduce((s, r) => s + (r.teamVals[i] > 0 ? 1 : 0), 0));
+}
+
+function renderKPIs(){
+  const totalSys = rawRows.reduce((s,r)=>s+r.sys,0);
+  const totalPhy = rawRows.reduce((s,r)=>s+r.phy,0);
+  const netVariance = totalPhy - totalSys;
+  const totalPending = rawRows.reduce((s,r)=>s+r.pending,0);
+  const totalExcessQty = rawRows.reduce((s,r)=>s + (r.variance>0 ? r.variance : 0),0);
+  const cMatch = rawRows.filter(r=>r.type==='Match').length;
+  const cShort = rawRows.filter(r=>r.type==='Short').length;
+  const cExcess = rawRows.filter(r=>r.type==='Excess').length;
+
+  const kpis = [
+    {lbl:'Total EANs', val:fmt(rawRows.length), cls:''},
+    {lbl:'Total SYS Qty', val:fmt(totalSys), cls:''},
+    {lbl:'Total Phy Count', val:fmt(totalPhy), cls:''},
+    {lbl:'Net Variance', val:(netVariance>=0?'+':'')+fmt(netVariance), cls: netVariance<0?'short':(netVariance>0?'excess':'match')},
+    {lbl:'Match EANs', val:fmt(cMatch), cls:'match'},
+    {lbl:'Short EANs', val:fmt(cShort), cls:'short'},
+    {lbl:'Excess EANs', val:fmt(cExcess), cls:'excess'},
+    {lbl:'Pending Scan Qty', val:fmt(totalPending), cls:'short'},
+    {lbl:'Excess Qty', val:fmt(totalExcessQty), cls:'excess'},
+  ];
+  document.getElementById('kpiRow').innerHTML = kpis.map(k =>
+    `<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div></div>`
+  ).join('');
+}
+
+function downloadTeamSummary(){
+  const totalQty = teamTotals.reduce((a,b)=>a+b,0);
+  const order = teamNames.map((_,i)=>i).sort((a,b)=> teamTotals[b]-teamTotals[a]);
+  const rows = order.map(i => [teamNames[i], teamTotals[i], teamEanCounts[i], totalQty ? (teamTotals[i]/totalQty*100).toFixed(1)+'%' : '0.0%']);
+  rows.push(['TOTAL', totalQty, rawRows.length, '100.0%']);
+  downloadCsv('team-wise-summary.csv', ['Team','Qty Counted','EANs Touched','Share %'], rows);
+}
+function downloadBinSummary(){
+  const rows = binSummary.map(b => [b.location, b.sys, b.phy, b.diff]);
+  downloadCsv('bin-wise-summary.csv', ['Location','SYS','Physical','Diff'], rows);
+}
+function downloadEanDetail(){
+  const rows = filteredRows.map(r => [r.ean, r.sys, r.phy, r.variance, r.type, r.pending]);
+  downloadCsv('ean-wise-detail.csv', ['EAN','SYS','Phy Count','Variance','Status','Pending Scan Qty'], rows);
+}
+
+function renderBinSummary(){
+  const tbody = document.querySelector('#binSummaryTable tbody');
+  tbody.innerHTML = binSummary.map(b => `
+    <tr>
+      <td>${b.location}</td>
+      <td class="num">${fmt(b.sys)}</td>
+      <td class="num">${fmt(b.phy)}</td>
+      <td class="num" style="${b.diff < 0 ? 'color:var(--short);' : ''}">${fmt(b.diff)}</td>
+    </tr>`).join('');
+}
+function renderTeamTable(){
+  const totalQty = teamTotals.reduce((a,b)=>a+b,0);
+  const minQty = teamTotals.length ? Math.min(...teamTotals) : 0;
+  const order = teamNames.map((_,i)=>i).sort((a,b)=> teamTotals[b]-teamTotals[a]);
+  const tbody = document.querySelector('#teamTable tbody');
+  let rowsHtml = order.map(i => {
+    const isLowest = teamTotals[i] === minQty;
+    return `
+    <tr${isLowest ? ' style="background:#ff5c7a14;"' : ''}>
+      <td>${teamNames[i]}${isLowest ? ' <span class="stamp Short" style="margin-left:6px;">Lowest</span>' : ''}</td>
+      <td class="num">${fmt(teamTotals[i])}</td>
+      <td class="num">${fmt(teamEanCounts[i])}</td>
+      <td class="num">${totalQty ? ((teamTotals[i]/totalQty*100).toFixed(1)) : '0.0'}%</td>
+    </tr>`;
+  }).join('');
+  rowsHtml += `
+    <tr style="border-top:2px solid var(--border);font-weight:600;">
+      <td>TOTAL</td>
+      <td class="num">${fmt(totalQty)}</td>
+      <td class="num">${fmt(rawRows.length)}</td>
+      <td class="num">100.0%</td>
+    </tr>`;
+  tbody.innerHTML = rowsHtml;
+}
+
+function renderNotMatchPanel(){
+  document.getElementById('notMatchSum').textContent = fmt(notMatchTotal);
+}
+
+function renderStatusChart(){
+  const cMatch = rawRows.filter(r=>r.type==='Match').length;
+  const cShort = rawRows.filter(r=>r.type==='Short').length;
+  const cExcess = rawRows.filter(r=>r.type==='Excess').length;
+  const ctx = document.getElementById('statusChart');
+  if(statusChart) statusChart.destroy();
+  statusChart = new Chart(ctx, {
+    type:'doughnut',
+    data:{
+      labels:['Short','Excess','Match'],
+      datasets:[{ data:[cShort,cExcess,cMatch], backgroundColor:['#ff5c7a','#ffb648','#2ecc8f'], borderColor:'#141b26', borderWidth:3 }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom', labels:{color:'#e7ecf5'}}}
+    }
+  });
+}
+
+function renderTopVarianceChart(){
+  const top = [...rawRows].sort((a,b)=>Math.abs(b.variance)-Math.abs(a.variance)).slice(0,10);
+  const ctx = document.getElementById('topVarianceChart');
+  if(topVarianceChart) topVarianceChart.destroy();
+  topVarianceChart = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: top.map(r=>r.ean),
+      datasets:[{
+        label:'Variance',
+        data: top.map(r=>r.variance),
+        backgroundColor: top.map(r=> r.variance<0 ? '#ff5c7a' : '#ffb648'),
+        borderRadius:4
+      }]
+    },
+    options:{
+      indexAxis:'y',
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#8996ab'}, grid:{color:'#1c2536'}},
+        y:{ticks:{color:'#8996ab', font:{family:'IBM Plex Mono', size:10}}, grid:{display:false}}
+      }
+    }
+  });
+}
+
+function applyFilters(){
+  const q = document.getElementById('searchBox').value.trim().toLowerCase();
+  const type = document.getElementById('typeFilter').value;
+  filteredRows = rawRows.filter(r =>
+    (type==='All' || r.type===type) && (!q || r.ean.toLowerCase().includes(q))
+  );
+  sortRows();
+  currentPage = 1;
+  renderTable();
+}
+
+function sortBy(col){
+  if(sortState.col === col){ sortState.dir = sortState.dir==='asc' ? 'desc' : 'asc'; }
+  else{ sortState.col = col; sortState.dir = 'asc'; }
+  sortRows();
+  renderTable();
+}
+
+function sortRows(){
+  const {col, dir} = sortState;
+  const mul = dir==='asc' ? 1 : -1;
+  filteredRows.sort((a,b) => {
+    let va = a[col], vb = b[col];
+    if(typeof va === 'string') return va.localeCompare(vb) * mul;
+    return (va - vb) * mul;
+  });
+}
+
+function renderTable(){
+  const start = (currentPage-1) * PAGE_SIZE;
+  const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
+  document.getElementById('eanTableBody').innerHTML = pageRows.map(r => `
+    <tr>
+      <td>${r.ean}</td>
+      <td class="num">${fmt(r.sys)}</td>
+      <td class="num">${fmt(r.phy)}</td>
+      <td class="num" style="color:${r.variance<0?'var(--short)':(r.variance>0?'var(--excess)':'var(--match)')}">${r.variance>=0?'+':''}${fmt(r.variance)}</td>
+      <td><span class="stamp ${r.type}">${r.type}</span></td>
+      <td class="num">${r.pending ? fmt(r.pending) : '—'}</td>
+    </tr>`).join('');
+
+  document.getElementById('rowCount').textContent = `${filteredRows.length} of ${rawRows.length} EANs`;
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+  document.getElementById('prevBtn').disabled = currentPage <= 1;
+  document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+}
+
+function changePage(delta){
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  currentPage = Math.min(totalPages, Math.max(1, currentPage + delta));
+  renderTable();
+}
+
+function resetCountdown(){
+  countdownVal = 300;
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    countdownVal--;
+    document.getElementById('countdown').textContent = countdownVal;
+    if(countdownVal <= 0) loadData();
+  }, 1000);
+}
+
+loadData();
+</script>
+<script>
+function copyScanLink(b){
+  const u=new URL(document.getElementById('scanLink').getAttribute('href'),location.href).href;
+  (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>{b.textContent='Copied ✓';},()=>{prompt('Scanner link:',u);});
+  setTimeout(()=>{b.textContent='Copy link';},1500);
+}
+</script>
+
+<script>
+(function(){
+  const SL_SHEET_ID = '1K-CIvdjWCDd-0N5cQXR2q9raKstQEOd3ec-hkkneD3o';
+  const SL_TAB = 'Audit Entries';
+  // Expiry MM/YYYY = us mahine ke LAST din tak valid (sheet ke "Remaining Shelf Life (Days)" column jaisa hi)
+  const BUCKETS = [
+    { k:'exp', label:'Expired',           sub:'Expiry nikal chuki', color:'#c2415a', test:d => d < 0 },
+    { k:'30',  label:'Less than 30 days', sub:'0 – 29 days',        color:'#ff5c7a', test:d => d >= 0 && d < 30 },
+    { k:'60',  label:'Less than 60 days', sub:'30 – 59 days',       color:'#ffb648', test:d => d >= 30 && d < 60 },
+    { k:'90',  label:'Less than 90 days', sub:'60 – 89 days',       color:'#e8d44d', test:d => d >= 60 && d < 90 },
+    { k:'90p', label:'Above 90 days',     sub:'90+ days',           color:'#2ecc8f', test:d => d >= 90 }
+  ];
+  const COLS = [
+    ['shelf','Shelf'],['ean','EAN'],['mrp','MRP','num'],['qty','Total QTY','num'],['mfgT','MFG'],['expT','Expiry'],
+    ['slife','Shelf Life (Months)','num'],['days','Remaining (Days)','num'],['bucketL','Status'],['auditor','Auditor'],['binId','Bin ID'],['tsT','Scanned At']
+  ];
+  const HEAD = ['Shelf','EAN','MRP','Total QTY','MFG (MM/YYYY)','Expiry (MM/YYYY)','Shelf Life (Months)','Remaining Shelf Life (Days)','Status','Auditor','Bin ID','Scanned At'];
+  let ROWS = [], FB = 'all', SK = 'days', SD = 1, LIM = 300, NOEXP = 0;
+
+  const g = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const nf = n => Number(n).toLocaleString('en-IN');
+  const cellVal = c => c ? (c.v != null ? c.v : null) : null;
+
+  function parseMonthYear(c){
+    if (!c) return null;
+    const v = c.v;
+    if (typeof v === 'string') {
+      let m = /^Date\((\d+),(\d+),(\d+)/.exec(v);
+      if (m) return { y:+m[1], m:+m[2] + 1 };
+      m = /^(\d{1,2})\/(\d{4})$/.exec(v.trim());
+      if (m) return { y:+m[2], m:+m[1] };
+    }
+    if (typeof c.f === 'string') {
+      const m = /^(\d{1,2})\/(\d{4})$/.exec(c.f.trim());
+      if (m) return { y:+m[2], m:+m[1] };
+    }
+    return null;
+  }
+  const mm = o => o ? String(o.m).padStart(2,'0') + '/' + o.y : '';
+  function parseTs(c){
+    if (!c) return '';
+    if (c.f) return c.f;
+    const m = /^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?/.exec(String(c.v || ''));
+    if (!m) return String(c.v || '');
+    const p = x => String(x || 0).padStart(2,'0');
+    return p(m[3]) + '-' + p(+m[2] + 1) + '-' + m[1] + (m[4] != null ? ' ' + p(m[4]) + ':' + p(m[5]) + ':' + p(m[6]) : '');
+  }
+  const findCol = (cols, test, fb) => { const i = cols.findIndex(c => test((c.label || '').toLowerCase().trim())); return i >= 0 ? i : fb; };
+
+  async function slLoad(){
+    g('slErr').textContent = '';
+    try {
+      const url = `https://docs.google.com/spreadsheets/d/${SL_SHEET_ID}/gviz/tq?tqx=out:json&headers=1&sheet=${encodeURIComponent(SL_TAB)}&_=${Date.now()}`;
+      const txt = await (await fetch(url, { cache:'no-store' })).text();
+      const j = JSON.parse(txt.substring(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+      if (j.status === 'error') throw new Error((j.errors && j.errors[0] && j.errors[0].detailed_message) || 'Sheet read error');
+      const cols = j.table.cols;
+      const ix = {
+        ts: findCol(cols, l => l === 'timestamp' || l === 'date', 0),
+        auditor: findCol(cols, l => l === 'auditor', 1),
+        shelf: findCol(cols, l => l === 'shelf', 2),
+        ean: findCol(cols, l => l === 'ean', 3),
+        mrp: findCol(cols, l => l === 'mrp', 4),
+        qty: findCol(cols, l => l === 'total qty', 8),
+        binId: findCol(cols, l => l === 'bin id', 9),
+        mfg: findCol(cols, l => l.includes('mfg'), 10),
+        exp: findCol(cols, l => l.includes('expiry') && !l.includes('remaining'), 11),
+        slife: findCol(cols, l => l.includes('shelf life') && !l.includes('remaining'), 12)
+      };
+      const now = new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      ROWS = []; NOEXP = 0;
+      (j.table.rows || []).forEach(r => {
+        const c = r.c || [];
+        const ean = cellVal(c[ix.ean]);
+        if (ean == null || String(ean).toLowerCase() === 'ean') return;
+        const exp = parseMonthYear(c[ix.exp]), mfg = parseMonthYear(c[ix.mfg]);
+        let days = null, b = null;
+        if (exp) { days = Math.round((new Date(exp.y, exp.m, 0) - today) / 86400000); b = BUCKETS.find(x => x.test(days)); }
+        else NOEXP++;
+        const sl = cellVal(c[ix.slife]);
+        ROWS.push({
+          shelf: cellVal(c[ix.shelf]) || '', ean: String(ean), mrp: Number(cellVal(c[ix.mrp])) || 0,
+          qty: Number(cellVal(c[ix.qty])) || 0, mfgT: mm(mfg), expT: mm(exp),
+          slife: (sl != null && sl !== '') ? Number(sl) : (mfg && exp ? (exp.y - mfg.y) * 12 + (exp.m - mfg.m) : ''),
+          days, bucket: b ? b.k : '', bucketL: b ? b.label : 'No expiry date',
+          auditor: cellVal(c[ix.auditor]) || '', binId: cellVal(c[ix.binId]) || '', tsT: parseTs(c[ix.ts])
+        });
+      });
+      const keep = g('slAud').value;
+      const auds = [...new Set(ROWS.map(r => r.auditor).filter(Boolean))].sort();
+      g('slAud').innerHTML = '<option value="">All auditors</option>' + auds.map(a => `<option ${a === keep ? 'selected' : ''}>${esc(a)}</option>`).join('');
+      g('slUpd').textContent = 'updated ' + new Date().toLocaleTimeString('en-IN');
+    } catch (e) {
+      g('slErr').textContent = 'Shelf life data load nahi hua: ' + e.message;
+    }
+    draw();
+  }
+
+  const matchQ = r => { const q = g('slQ').value.trim().toLowerCase(); return !q || (r.ean + ' ' + r.shelf + ' ' + r.auditor + ' ' + r.binId).toLowerCase().includes(q); };
+  const matchA = r => { const a = g('slAud').value; return !a || r.auditor === a; };
+  const filtered = () => ROWS.filter(r => (FB === 'all' || r.bucket === FB) && matchA(r) && matchQ(r));
+
+  function draw(){
+    const base = ROWS.filter(r => matchA(r) && matchQ(r));
+    const withExp = base.filter(r => r.bucket);
+    const totQ = withExp.reduce((s, r) => s + r.qty, 0) || 1;
+    g('slCards').innerHTML = BUCKETS.map(b => {
+      const rs = base.filter(r => r.bucket === b.k), qt = rs.reduce((s, r) => s + r.qty, 0);
+      return `<button class="sl-card ${FB === b.k ? 'on' : ''}" style="--k:${b.color}" onclick="slSetB('${b.k}')">
+        <div class="lbl">${b.label}</div><div class="val">${nf(qt)}</div>
+        <div class="u">units · ${nf(rs.length)} EAN lines</div><div class="r">${b.sub}</div></button>`;
+    }).join('');
+    g('slBar').innerHTML = BUCKETS.map(b => {
+      const qt = withExp.filter(r => r.bucket === b.k).reduce((s, r) => s + r.qty, 0);
+      return `<div style="width:${qt / totQ * 100}%;background:${b.color}" title="${b.label}: ${nf(qt)}"></div>`;
+    }).join('');
+
+    const rs = filtered();
+    rs.sort((x, y) => {
+      const A = x[SK], B = y[SK];
+      const an = A === null || A === '', bn = B === null || B === '';
+      if (an && bn) return 0; if (an) return 1; if (bn) return -1;
+      if (typeof A === 'number' && typeof B === 'number') return (A - B) * SD;
+      return String(A).localeCompare(String(B), undefined, { numeric:true }) * SD;
+    });
+    g('slTh').innerHTML = '<tr>' + COLS.map(c => `<th class="sortable ${c[2] || ''}" onclick="slSort('${c[0]}')">${c[1]}<span class="arrow">${SK === c[0] ? (SD === 1 ? '▲' : '▼') : '↕'}</span></th>`).join('') + '</tr>';
+    const colorOf = k => (BUCKETS.find(b => b.k === k) || {}).color || '#8996ab';
+    g('slTb').innerHTML = rs.slice(0, LIM).map(r => '<tr>' + COLS.map(c => {
+      const v = r[c[0]];
+      if (c[0] === 'bucketL') return `<td><span class="sl-tag" style="--k:${colorOf(r.bucket)}">${esc(v)}</span></td>`;
+      if (c[0] === 'days') return `<td class="num" style="color:${colorOf(r.bucket)};font-weight:600">${v == null ? '—' : v}</td>`;
+      return `<td class="${c[2] || ''}">${esc(c[2] === 'num' && v !== '' ? nf(v) : v)}</td>`;
+    }).join('') + '</tr>').join('') || `<tr><td colspan="${COLS.length}" style="text-align:center;color:var(--muted);padding:22px">Koi data nahi</td></tr>`;
+    g('slCnt').textContent = `${nf(rs.length)} rows · ${nf(rs.reduce((s, r) => s + r.qty, 0))} units`;
+    g('slInfo').textContent = `Showing ${nf(Math.min(LIM, rs.length))} of ${nf(rs.length)}` + (NOEXP ? ` · ${NOEXP} rows me expiry date nahi hai` : '');
+    g('slMoreBtn').style.display = rs.length > LIM ? '' : 'none';
+  }
+
+  window.slSetB = k => { FB = (FB === k) ? 'all' : k; LIM = 300; draw(); };
+  window.slSort = k => { if (SK === k) SD = -SD; else { SK = k; SD = 1; } draw(); };
+  window.slShowMore = () => { LIM += 300; draw(); };
+  window.slReset = clear => {
+    if (clear) { g('slQ').value = ''; g('slAud').value = ''; FB = 'all'; }
+    LIM = 300; draw();
+  };
+
+  // ---------- download (current filtered view) ----------
+  function dlRows(){
+    return filtered().sort((x, y) => (x.days == null) - (y.days == null) || (x.days - y.days)).map(r =>
+      [r.shelf, r.ean, r.mrp, r.qty, r.mfgT, r.expT, r.slife, r.days == null ? '' : r.days, r.bucketL, r.auditor, r.binId, r.tsT]);
+  }
+  function fname(ext){
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    return `Remaining_Shelf_Life_${FB === 'all' ? 'All' : FB}_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.${ext}`;
+  }
+  function save(blob, name){
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  window.slDownload = type => {
+    const rows = dlRows();
+    if (!rows.length) return alert('Download ke liye data nahi hai.');
+    if (type === 'xlsx') {
+      if (typeof XLSX === 'undefined') return alert('Excel library load nahi hui — CSV download use karo.');
+      const ws = XLSX.utils.aoa_to_sheet([HEAD].concat(rows));
+      ws['!cols'] = HEAD.map((h, i) => ({ wch: i === 1 ? 16 : Math.max(10, h.length + 2) }));
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Shelf Life');
+      XLSX.writeFile(wb, fname('xlsx'));
+      return;
+    }
+    const cell = (v, i) => {
+      const s = String(v == null ? '' : v);
+      if (i === 1) return '="' + s.replace(/"/g, '') + '"';          // EAN Excel me sci-notation na bane
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const csv = [HEAD.join(',')].concat(rows.map(r => r.map(cell).join(','))).join('\r\n');
+    save(new Blob(['\ufeff' + csv], { type:'text/csv;charset=utf-8' }), fname('csv'));
+  };
+
+  // Page ka "Refresh now" / auto-refresh dono ke saath shelf life bhi refresh ho
+  if (typeof window.loadData === 'function') {
+    const orig = window.loadData;
+    window.loadData = function(){ slLoad(); return orig.apply(this, arguments); };
+  }
+  slLoad();
+})();
+</script>
+</body>
+</html>
